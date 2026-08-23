@@ -1,0 +1,28 @@
+[Unit]
+Description=ASUS ExpertBook B9400CBA Light Bar Controller
+Documentation=man:systemd.service(5)
+After=systemd-udevd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 -u /usr/local/libexec/asus-expertbook-lightbar
+
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=5s
+
+User=root
+Group=root
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes
+
+[Install]
+WantedBy=multi-user.target

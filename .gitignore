@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*.bak
+*.backup
+*~
+*.swp
+*.zip
+*.tar
+*.tar.gz
+*.tar.zst
+
+# Never publish proprietary ASUS Windows payloads
+*.exe
+*.dll
+*.sys
+*.cat
+*.msi
+asus-sci*/
+AsusOptimization*/
+outer/
+inner/
