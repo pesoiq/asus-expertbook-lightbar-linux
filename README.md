@@ -157,6 +157,12 @@ development because they are not needed by a new user following the working path
 - [`rollback.md`](rollback.md) — manual rollback
 - [`tested-versions.txt`](tested-versions.txt) — tested environment
 
+## Development and validation disclosure
+
+Development, diagnostics, protocol analysis, coding, and documentation for this project were assisted by OpenAI ChatGPT (GPT-5.6 Sol).
+
+All reported HID responses, RGB/color behavior, charging/full-charge behavior, Linux platform-profile transitions, systemd results, and other hardware validation were obtained from the physical ASUS ExpertBook B9400CBA/B9450CBA used during development. These hardware test results were not simulated by the AI.
+
 ## Related work / upstream
 
 This work was informed by [`andykarpov/expertbook-led`](https://github.com/andykarpov/expertbook-led),
