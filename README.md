@@ -1,181 +1,87 @@
 # ASUS ExpertBook B9400CBA/B9450CBA Light Bar Support for Linux
 
-Working Linux userspace support for the front **Light Bar** on the ASUS ExpertBook
-B9400CBA/B9450CBA using the `ALED0217` HID-over-I2C controller.
+Linux userspace support for the `ALED0217` / `0B05:0124` front Light Bar on ASUS ExpertBook B9400CBA/B9450CBA.
 
-## Recommended path for new users
+## Releases
 
-This README contains the **final tested installation path only**. Development experiments,
-reverse-engineering notes, and diagnostic history are kept separately under [`docs/`](docs/).
+- **v1.0.0 — Windows-parity baseline:** conservative charging/full-charge and performance-profile behavior modeled after the useful stock behavior.
+- **v2.0.0 — Linux-enhanced edition:** keeps the v1 safety/base-state logic and adds persistent terminal-selectable charging patterns plus KDE notification indication.
 
-### Tested hardware
+v1.0.0 remains permanently available from its Git tag. v2.0.0 is the recommended enhanced Linux release for the tested hardware.
 
-- Laptop: `ASUS EXPERTBOOK B9400CBA_B9450CBA`
-- Controller: `ALED0217:00 0B05:0124`
-- HID VID:PID: `0B05:0124`
-- Transport: HID-over-I2C / `hidraw`
-- Light Bar collection: Usage Page `0xFFB5`, Usage `0x00A0`, Report ID `0x20`
-- Feature report size: 33 bytes including Report ID
-- Detected LED-zone count on the tested machine: 5
+## Tested hardware/software
 
-### Tested software
-
-- Fedora Linux 44 KDE Plasma Desktop Edition
+- ASUS EXPERTBOOK B9400CBA_B9450CBA
+- ALED0217:00 `0B05:0124`, HID-over-I2C / hidraw
+- 5 LED zones, report ID `0x20`
+- Fedora Linux 44 KDE Plasma
 - Kernel `7.1.9-200.fc44.x86_64`
-- KDE Plasma `6.7.4`
-- Wayland / `kwin_wayland`
+- KDE Plasma `6.7.4`, Wayland
 - systemd `259`
 
-## Final behavior
+## v2 behavior
 
-| Linux state | Light Bar behavior |
+| State | Light Bar behavior |
 |---|---|
 | AC disconnected | Off |
-| AC connected + battery below 100% + `Charging` | Pure red, low intensity |
-| AC connected + battery at 100% | Pure green, low intensity |
-| Transition into `performance` platform profile | Blue-cyan for 3 seconds |
-| After the performance indication | Restore current red / green / off state |
+| AC + battery at 100% | Static low-intensity green |
+| AC + charging + battery below 100% | Persistently selected charging pattern |
+| Enter performance profile | Blue-cyan for 3 seconds, then restore |
+| KDE/Freedesktop notification | Very-dim yellow for 1 second, then restore |
 
-The blue-cyan indication appears **only when entering** `performance`. Starting the service while
-the laptop is already in `performance` does not create an extra flash.
+Charging patterns:
 
-## 1. Confirm the hardware first
+1. Liquid Rainbow v0.2 Video Dither
+2. Center Bloom
+3. Hard-edge Constant-Luminance Flow
+4. ASUS hardware Effect 14
+5. Static Red v1
 
-```bash
-cat /sys/devices/virtual/dmi/id/product_name
+Pattern 4 requires the validated ALED0217 HID reset path when leaving the hardware effect. v2.0.0 uses the physically validated `2 s` detach + `3 s` post-bind stabilization timing before returning to direct RGB.
 
-grep -RHiE 'HID_ID=0018:00000B05:00000124|HID_NAME=ALED0217' \
-  /sys/bus/hid/devices/*/uevent 2>/dev/null
-```
-
-Expected hardware includes:
-
-```text
-ASUS EXPERTBOOK B9400CBA_B9450CBA
-HID_ID=0018:00000B05:00000124
-HID_NAME=ALED0217:00 0B05:0124
-```
-
-Stop if your hardware does not match. Do not apply this project blindly to another ASUS RGB/HID device.
-
-## 2. Clone to the documented project path
-
-The path used throughout this project is:
-
-```text
-$HOME/src/asus-expertbook-lightbar-linux
-```
+## Install
 
 ```bash
-mkdir -p "$HOME/src"
-
-git clone \
-  https://github.com/pesoiq/asus-expertbook-lightbar-linux.git \
-  "$HOME/src/asus-expertbook-lightbar-linux"
-
-cd "$HOME/src/asus-expertbook-lightbar-linux"
-git checkout --detach v1.0.0
+git clone https://github.com/pesoiq/asus-expertbook-lightbar-linux.git
+cd asus-expertbook-lightbar-linux
+git checkout v2.0.0
+./install.sh
 ```
 
-## 3. Install
+## Terminal control
 
 ```bash
-cd "$HOME/src/asus-expertbook-lightbar-linux"
-sudo ./install.sh
+lightbarctl list
+lightbarctl status
+lightbarctl 1
+lightbarctl 2
+lightbarctl 3
+lightbarctl 4
+lightbarctl 5
 ```
 
-Permanent installed paths:
+The selected pattern is persisted in `/var/lib/asus-expertbook-lightbar/pattern` and survives reboot/shutdown until explicitly changed.
 
-```text
-/usr/local/libexec/asus-expertbook-lightbar
-/etc/systemd/system/asus-expertbook-lightbar.service
-```
+## Installed components
 
-The installer verifies the laptop, HID device, descriptor, required sysfs interfaces, Python
-syntax, and systemd unit before enabling the service.
+- `/usr/local/libexec/asus-expertbook-lightbar` — root hardware daemon
+- `/usr/local/bin/lightbarctl` — terminal control client
+- `/usr/local/libexec/asus-expertbook-lightbar-notify-watch` — session notification watcher
+- `/etc/systemd/system/asus-expertbook-lightbar.service` — hardware daemon service
+- `~/.config/systemd/user/asus-expertbook-lightbar-notifications.service` — per-user KDE/Freedesktop notification bridge
 
-## 4. Verify the service
+## v1 vs v2
 
-```bash
-systemctl status asus-expertbook-lightbar.service --no-pager -l
+See `docs/v1-v2-comparison.md` and `RELEASE_NOTES_v2.0.0.md`.
 
-sudo journalctl \
-  -u asus-expertbook-lightbar.service \
-  -b --no-pager -n 50
-```
+## Safety / scope
 
-A matching tested controller returns:
-
-```text
-20 C1 02 05
-```
-
-## 5. Functional test
-
-Do not call the installation successful only because systemd started. Verify the original behavior:
-
-1. AC connected + battery at 100% -> green.
-2. Disconnect AC -> Light Bar off.
-3. AC connected + below 100% + actively charging -> red.
-4. Change KDE/Fedora from `quiet` or `balanced` to `performance` -> blue-cyan for 3 seconds, then restore the base state.
-
-On the tested laptop:
-
-```text
-quiet       -> ASUS thermal policy 2 (silent)
-balanced    -> ASUS thermal policy 0 (default)
-performance -> ASUS thermal policy 1 (overboost)
-```
-
-The daemon watches `/sys/firmware/acpi/platform_profile`. It deliberately does not use instantaneous
-fan RPM as the trigger.
-
-## 6. Rollback
-
-```bash
-cd "$HOME/src/asus-expertbook-lightbar-linux"
-sudo ./uninstall.sh
-```
-
-This project does not modify the kernel, GRUB, BIOS, firmware, initramfs, or driver blacklists.
-
-## Color customization
-
-The controller supports direct RGB control for five zones. The shipped persistent red/green values
-are intentionally dim, and the short performance indication is a dim blue-cyan. Users can customize
-RGB values in `src/asus-expertbook-lightbar.py`; see [`docs/customization.md`](docs/customization.md).
-
-The README intentionally does not reproduce the many brightness/color experiments used during
-development because they are not needed by a new user following the working path.
-
-## Documentation
-
-- [`docs/protocol.md`](docs/protocol.md) — confirmed HID protocol used by the final solution
-- [`docs/investigation-summary.md`](docs/investigation-summary.md) — concise diagnostic/reverse-engineering history
-- [`docs/test-results.md`](docs/test-results.md) — validated tests on the physical laptop
-- [`docs/customization.md`](docs/customization.md) — concise color customization notes
-- [`rollback.md`](rollback.md) — manual rollback
-- [`tested-versions.txt`](tested-versions.txt) — tested environment
+This project does not modify GRUB, kernel command-line parameters, BIOS/UEFI, firmware, initramfs, or module blacklists. The hardware-effect exit path temporarily unbinds/rebinds only the matching `ALED0217` HID-over-I2C device through `i2c_hid_acpi`.
 
 ## Development and validation disclosure
 
-Development, diagnostics, protocol analysis, coding, and documentation for this project were assisted by OpenAI ChatGPT (GPT-5.6 Sol).
-
-All reported HID responses, RGB/color behavior, charging/full-charge behavior, Linux platform-profile transitions, systemd results, and other hardware validation were obtained from the physical ASUS ExpertBook B9400CBA/B9450CBA used during development. These hardware test results were not simulated by the AI.
-
-## Related work / upstream
-
-This work was informed by [`andykarpov/expertbook-led`](https://github.com/andykarpov/expertbook-led),
-which documented built-in effects and brightness control for the same `0B05:0124` controller family.
-The direct RGB and LED-count findings here are also relevant to its custom-color investigation.
-
-No proprietary ASUS executable, DLL, driver, firmware, or extracted Windows binary is included.
+Development, diagnostics, protocol analysis, implementation, integration, and documentation were assisted by **OpenAI ChatGPT (GPT-5.6 Sol)**. Physical hardware observations and acceptance testing were performed on the actual ASUS ExpertBook by the project maintainer and were not simulated by the AI.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
-
-## Disclaimer
-
-Independent community project; not affiliated with or endorsed by ASUSTeK Computer Inc.
-Use only on matching hardware and review the source before installation.
+MIT. Independent community project; not affiliated with or endorsed by ASUSTeK Computer Inc.

@@ -1,5 +1,5 @@
 [Unit]
-Description=ASUS ExpertBook B9400CBA Light Bar Controller
+Description=ASUS ExpertBook B9400CBA Light Bar Controller v2
 Documentation=man:systemd.service(5)
 After=systemd-udevd.service
 
@@ -9,10 +9,15 @@ ExecStart=/usr/bin/python3 -u /usr/local/libexec/asus-expertbook-lightbar
 
 Restart=on-failure
 RestartSec=2s
-TimeoutStopSec=5s
+TimeoutStopSec=8s
 
 User=root
 Group=root
+
+RuntimeDirectory=asus-expertbook-lightbar
+RuntimeDirectoryMode=0755
+StateDirectory=asus-expertbook-lightbar
+StateDirectoryMode=0755
 
 NoNewPrivileges=yes
 ProtectSystem=strict
@@ -23,6 +28,10 @@ ProtectKernelModules=yes
 ProtectControlGroups=yes
 LockPersonality=yes
 RestrictRealtime=yes
+RestrictAddressFamilies=AF_UNIX
+
+# Required only for the proven Effect 14 exit/reset path.
+ReadWritePaths=/sys/bus/i2c/drivers/i2c_hid_acpi
 
 [Install]
 WantedBy=multi-user.target

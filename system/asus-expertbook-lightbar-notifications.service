@@ -1,0 +1,12 @@
+[Unit]
+Description=ASUS ExpertBook Light Bar KDE Notification Bridge
+
+[Service]
+Type=simple
+Environment=LC_ALL=C
+ExecStart=/usr/local/libexec/asus-expertbook-lightbar-notify-watch
+Restart=always
+RestartSec=2s
+
+[Install]
+WantedBy=default.target

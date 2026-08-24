@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -u
+
+while true; do
+    dbus-monitor \
+        --session \
+        --profile \
+        "type='method_call',interface='org.freedesktop.Notifications',member='Notify'" \
+        2>/dev/null |
+    while IFS= read -r line; do
+        case "$line" in
+            mc*"org.freedesktop.Notifications"*"Notify"*)
+                /usr/local/bin/lightbarctl notify >/dev/null 2>&1 || true
+                ;;
+        esac
+    done
+
+    sleep 1
+done

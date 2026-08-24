@@ -1,56 +1,69 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [ "${EUID:-$(id -u)}" -ne 0 ]; then
-    echo "Run as root: sudo ./install.sh"
-    exit 1
-fi
-
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE="$ROOT/src/asus-expertbook-lightbar.py"
-UNIT="$ROOT/system/asus-expertbook-lightbar.service"
+SERVICE="asus-expertbook-lightbar.service"
+DAEMON="/usr/local/libexec/asus-expertbook-lightbar"
+CTL="/usr/local/bin/lightbarctl"
+WATCH="/usr/local/libexec/asus-expertbook-lightbar-notify-watch"
+SYSTEM_UNIT="/etc/systemd/system/$SERVICE"
+STATE_DIR="/var/lib/asus-expertbook-lightbar"
 
-PRODUCT="$(cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null || true)"
-case "$PRODUCT" in
-    *B9400CBA*|*B9450CBA*) ;;
-    *) echo "ERROR: unsupported/unverified laptop product: $PRODUCT"; exit 1 ;;
-esac
+TARGET_USER="${SUDO_USER:-${USER}}"
+TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+USER_UNIT_DIR="$TARGET_HOME/.config/systemd/user"
+USER_UNIT="$USER_UNIT_DIR/asus-expertbook-lightbar-notifications.service"
 
-mapfile -t DEVICES < <(compgen -G '/sys/bus/hid/devices/0018:0B05:0124.*' || true)
-if [ "${#DEVICES[@]}" -ne 1 ]; then
-    echo "ERROR: expected exactly one ALED0217 0B05:0124 HID device; found ${#DEVICES[@]}"
-    exit 1
-fi
-DEV="${DEVICES[0]}"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+BACKUP="/var/backups/asus-expertbook-lightbar-before-v2-$STAMP"
 
-python3 - "$DEV/report_descriptor" <<'PY'
-import sys
-with open(sys.argv[1], 'rb') as f:
-    d = f.read()
-sig = bytes([0x06,0xB5,0xFF,0x09,0xA0,0xA1,0x01,0x85,0x20])
-if sig not in d:
-    raise SystemExit('ERROR: HID descriptor does not match FFB5/A0/Report20')
-print('Hardware descriptor: MATCH')
-PY
+sudo -v
 
-for p in \
-    /sys/class/power_supply/AC0/online \
-    /sys/class/power_supply/BAT0/status \
-    /sys/class/power_supply/BAT0/capacity \
-    /sys/firmware/acpi/platform_profile
-do
-    [ -r "$p" ] || { echo "ERROR: required interface missing: $p"; exit 1; }
+for cmd in python3 dbus-monitor systemctl install getent; do
+    command -v "$cmd" >/dev/null 2>&1 || { echo "ERROR: missing command: $cmd"; exit 1; }
 done
 
-python3 -m py_compile "$SOURCE"
+PRODUCT="$(cat /sys/class/dmi/id/product_name 2>/dev/null || true)"
+case "$PRODUCT" in
+    *B9400CBA*|*B9450CBA*) ;;
+    *) echo "ERROR: unsupported DMI product: $PRODUCT"; exit 2 ;;
+esac
 
-install -d -m 0755 /usr/local/libexec
-install -m 0755 "$SOURCE" /usr/local/libexec/asus-expertbook-lightbar
-install -m 0644 "$UNIT" /etc/systemd/system/asus-expertbook-lightbar.service
+python3 -m py_compile "$ROOT/src/asus-expertbook-lightbar.py" "$ROOT/src/lightbarctl.py"
+bash -n "$ROOT/src/asus-expertbook-lightbar-notify-watch"
+systemd-analyze verify "$ROOT/system/asus-expertbook-lightbar.service" >/dev/null
+systemd-analyze --user verify "$ROOT/system/asus-expertbook-lightbar-notifications.service" >/dev/null
 
-systemctl daemon-reload
-systemd-analyze verify /etc/systemd/system/asus-expertbook-lightbar.service
-systemctl enable --now asus-expertbook-lightbar.service
+sudo install -d -m 0755 "$BACKUP"
+for p in "$DAEMON" "$CTL" "$WATCH" "$SYSTEM_UNIT"; do
+    if sudo test -e "$p"; then sudo cp -a "$p" "$BACKUP/"; fi
+done
+if test -e "$USER_UNIT"; then cp -a "$USER_UNIT" "$BACKUP/"; fi
+sudo ln -sfn "$BACKUP" /var/backups/asus-expertbook-lightbar-before-v2-latest
 
-echo
-systemctl status asus-expertbook-lightbar.service --no-pager -l
+sudo systemctl stop "$SERVICE" 2>/dev/null || true
+systemctl --user disable --now asus-expertbook-lightbar-notifications.service >/dev/null 2>&1 || true
+
+sudo install -d -m 0755 /usr/local/libexec /usr/local/bin "$STATE_DIR"
+sudo install -m 0755 "$ROOT/src/asus-expertbook-lightbar.py" "$DAEMON"
+sudo install -m 0755 "$ROOT/src/lightbarctl.py" "$CTL"
+sudo install -m 0755 "$ROOT/src/asus-expertbook-lightbar-notify-watch" "$WATCH"
+sudo install -m 0644 "$ROOT/system/asus-expertbook-lightbar.service" "$SYSTEM_UNIT"
+
+install -d -m 0755 "$USER_UNIT_DIR"
+install -m 0644 "$ROOT/system/asus-expertbook-lightbar-notifications.service" "$USER_UNIT"
+
+if ! sudo test -s "$STATE_DIR/pattern"; then
+    echo 5 | sudo tee "$STATE_DIR/pattern" >/dev/null
+fi
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now "$SERVICE"
+systemctl --user daemon-reload
+systemctl --user enable --now asus-expertbook-lightbar-notifications.service
+
+printf 'System daemon : '; systemctl is-active "$SERVICE"
+printf 'Notification : '; systemctl --user is-active asus-expertbook-lightbar-notifications.service
+"$CTL" status
+
+echo "Backup: $BACKUP"

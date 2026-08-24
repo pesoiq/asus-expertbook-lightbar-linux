@@ -1,31 +1,8 @@
-ASUS ExpertBook Light Bar Linux — v1.0.0
-Test date: 2026-08-23
-
-Hardware
---------
-Laptop: ASUS EXPERTBOOK B9400CBA_B9450CBA
-Motherboard: B9400CBA
-BIOS: B9400CBA.324
-CPU: Intel Core i7-1255U
-Light Bar controller: ALED0217:00 0B05:0124
-Transport: HID-over-I2C / hidraw
-HID Usage Page: 0xFFB5
-HID Usage: 0x00A0
-Report ID: 0x20
-Detected LED-zone count: 5
-
-Software
---------
+Release: v2.0.0
 Fedora Linux 44 KDE Plasma Desktop Edition
 Kernel: 7.1.9-200.fc44.x86_64
 KDE Plasma: 6.7.4
-Session: Wayland / kwin_wayland
+Wayland / kwin_wayland
 systemd: 259
-
-Validated runtime
------------------
-Service: asus-expertbook-lightbar.service
-Enabled: yes
-Active: yes
-Handshake: 20 C1 02 05
-Observed full/AC state: AC=1, BAT=Full, CAP=100 -> FULL_GREEN_5
+Hardware: ASUS EXPERTBOOK B9400CBA_B9450CBA
+Controller: ALED0217:00 0B05:0124
